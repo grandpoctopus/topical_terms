@@ -2,8 +2,8 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_frame_equal
 
-from topical_terms.build_topic_map.build_topic_map import (
-    clean_subreddit_topics_df,
+from topical_terms.subreddit_topic_map.build_topic_map import (
+    clean_subreddit_topics,
     get_general_topics_df,
     get_subreddit_topics_df,
     get_videogame_topics_df,
@@ -136,11 +136,11 @@ def test_get_subreddit_topics_df(
     assert_frame_equal(actual, subreddit_topics_df)
 
 
-def test_clean_subreddit_topics_df(
+def test_clean_subreddit_topics(
     subreddit_topics_df: pd.DataFrame,
     cleaned_topics_df: pd.DataFrame,
 ):
     topic_map = {"1": "one", "2": "two"}
-    actual = clean_subreddit_topics_df(subreddit_topics_df, topic_map)
+    actual = clean_subreddit_topics(subreddit_topics_df, topic_map)
     print(actual)
     assert_frame_equal(actual, cleaned_topics_df)

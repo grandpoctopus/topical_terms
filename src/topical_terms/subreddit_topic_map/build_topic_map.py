@@ -4,7 +4,9 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup, NavigableString
 
-from topical_terms.build_topic_map.topic_cleanup_map import TOPIC_CLEANUP_MAP
+from topical_terms.subreddit_topic_map.topic_cleanup_map import (
+    TOPIC_CLEANUP_MAP,
+)
 
 REDDIT_URL = "https://www.reddit.com"
 SUBREDDIT_LIST_URL = f"{REDDIT_URL}/r/ListOfSubreddits/wiki/listofsubreddits/"
