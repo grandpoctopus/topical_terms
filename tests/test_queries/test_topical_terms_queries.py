@@ -34,13 +34,8 @@ class TestUnitTopicSpecificTrendingWordsQuery:
         query: TopicSpecificTrendingWordsQuery,
         expected_topic_specific_trending_words_df: DataFrame,
     ):
-        actual = query.run().orderBy("id")
-        actual.select(
-            "id",
-            "daily_word_occurence_per_topic",
-            "daily_word_occurence",
-            "total_daily_word_count",
-        ).show(truncate=False)
         assert_pyspark_df_equal(
-            actual, expected_topic_specific_trending_words_df
+            query.run(),
+            expected_topic_specific_trending_words_df,
+            order_by="id",
         )
