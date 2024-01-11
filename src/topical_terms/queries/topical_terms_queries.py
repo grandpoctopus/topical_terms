@@ -15,6 +15,7 @@ from pyspark.sql.functions import (
     split,
     sum,
     to_date,
+    trim,
 )
 from pyspark.sql.window import Window
 from pyspark_pipeline.queries import Query
@@ -51,6 +52,14 @@ class TopicSpecificTrendingWordsQuery(Query):
             )
             .withColumn("date", to_date(col("date_time")))
             .withColumn("month", month(to_date(col("date_time"))))
+        )
+
+    def filter_by_eligibility_dates(self, df: DataFrame) -> DataFrame:
+        return df.where(
+            col("date").between(
+                self.settings.elgblty_start_date,
+                self.settings.elgblty_end_date,
+            )
         )
 
     def add_topics_column(
@@ -136,12 +145,25 @@ class TopicSpecificTrendingWordsQuery(Query):
             .select("topics", "word", "date_time", "month", "date")
         )
 
-    def split_topics_into_topic_column(
+    def explode_topics_column_into_topic_column(
         self, reddit_comments_df: DataFrame
     ) -> DataFrame:
-        return reddit_comments_df.withColumn(
-            "topic", explode(split(col("topics"), ","))
-        ).select("topic", "word", "date_time", "month", "date")
+        """
+        Some subreddits relate to multiple topics separated by commas
+        """
+        return (
+            reddit_comments_df.withColumn(
+                "raw_topic", explode(split(col("topics"), ","))
+            )
+            .withColumn("topic", trim(lower(col("raw_topic"))))
+            .select(
+                "topic",
+                "word",
+                "date_time",
+                "month",
+                "date",
+            )
+        )
 
     def get_daily_word_occurence_per_topic(
         self, reddit_comments_df: DataFrame
@@ -356,9 +378,11 @@ class TopicSpecificTrendingWordsQuery(Query):
             self.reddit_comments_df.select(
                 "created_utc", "body", "permalink", "score", "subreddit"
             )
-            .transform(self.add_topics_column)
+            .transform(self.add_date_columns)
+            .transform(self.filter_by_eligibility_dates)
             .transform(self.add_topics_column)
             .transform(self.add_word_column)
+            .transform(self.explode_topics_column_into_topic_column)
             .transform(self.add_word_count_columns)
             .transform(self.add_topic_frequency_and_specificity_columns)
             .transform(self.add_rolling_average_daily_frequency_column)
@@ -378,5 +402,4 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "change_in_rolling_average_of_daily_frequency",
             )
         )
-
         return word_usage_stats_df.select(self.schema.get_columns_list())
