@@ -11,7 +11,7 @@ from topical_terms.subreddit_topic_map.topic_cleanup_map import (
 REDDIT_URL = "https://www.reddit.com"
 SUBREDDIT_LIST_URL = f"{REDDIT_URL}/r/ListOfSubreddits/wiki/listofsubreddits/"
 VIDEOGAME_SUBREDDITS_LIST = f"{REDDIT_URL}/r/ListOfSubreddits/wiki/games50k"
-COLUMNS = ["topic", "subreddit"]
+COLUMNS = ["topics", "subreddit"]
 
 
 def get_general_topics_df(html: str) -> pd.DataFrame:
@@ -20,9 +20,9 @@ def get_general_topics_df(html: str) -> pd.DataFrame:
     headers = soup.find_all(["h2", "h3"])
     for header in headers:
         if header.strong is not None:
-            topic = header.strong.text
+            topics = header.strong.text
         elif header.em is not None:
-            topic = header.em.text
+            topics = header.em.text
         else:
             continue
         node = header.next_element.next_element.next_element.next_element
@@ -30,7 +30,7 @@ def get_general_topics_df(html: str) -> pd.DataFrame:
             continue
         subreddit = node.text.splitlines()
         subreddits_df = pd.DataFrame(subreddit, columns=["subreddit"])
-        subreddits_df["topic"] = topic
+        subreddits_df["topics"] = topics
         subreddit_topics_df = pd.concat(
             [subreddit_topics_df, subreddits_df], ignore_index=True, sort=True
         )
@@ -48,7 +48,7 @@ def get_videogame_topics_df(html: str) -> pd.DataFrame:
                 vg_subreddits.append(tag_text)
     vg_subs = pd.DataFrame(columns=COLUMNS)
     vg_subs["subreddit"] = vg_subreddits
-    vg_subs["topic"] = "Video Games"
+    vg_subs["topics"] = "Video Games"
     return vg_subs[COLUMNS]
 
 
@@ -60,7 +60,7 @@ def get_subreddit_topics_df(general_topics_df, vg_subs_df) -> pd.DataFrame:
     )
 
     subreddit_topics_df = subreddit_topics_df.groupby("subreddit")[
-        "topic"
+        "topics"
     ].apply(",".join)
     subreddit_topics_df = subreddit_topics_df.to_frame()
     subreddit_topics_df.reset_index(level=0, inplace=True)
@@ -80,9 +80,9 @@ def clean_subreddit_topics(
         ].str.replace(original_string, "")
 
     for original_string, replacement_string in topic_cleanup_map.items():
-        subreddit_topics_df["topic"] = subreddit_topics_df["topic"].str.replace(
-            original_string, replacement_string
-        )
+        subreddit_topics_df["topics"] = subreddit_topics_df[
+            "topics"
+        ].str.replace(original_string, replacement_string)
 
     return subreddit_topics_df
 

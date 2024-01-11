@@ -31,7 +31,7 @@ def general_topics_html() -> str:
 def general_topics_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "topic": ["Topic 1", "Topic 2", "Topic 2"],
+            "topics": ["Topic 1", "Topic 2", "Topic 2"],
             "subreddit": ["Subreddit 1", "Subreddit 2", "r/Subreddit 3"],
         }
     )
@@ -57,7 +57,7 @@ def video_game_topics_html() -> str:
 def video_game_topics_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "topic": [
+            "topics": [
                 "Video Games",
                 "Video Games",
             ],
@@ -73,7 +73,7 @@ def video_game_topics_df() -> pd.DataFrame:
 def subreddit_topics_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "topic": [
+            "topics": [
                 "Video Games",
                 "Video Games",
                 "Topic 1",
@@ -95,7 +95,7 @@ def subreddit_topics_df() -> pd.DataFrame:
 def cleaned_topics_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "topic": [
+            "topics": [
                 "Video Games",
                 "Video Games",
                 "Topic one",

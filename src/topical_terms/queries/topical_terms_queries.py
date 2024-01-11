@@ -26,7 +26,7 @@ from pyspark_pipeline.queries import Query
 class TopicSpecificTrendingWordsQuery(Query):
     def __init__(
         self,
-        reddid_comments_df: DataFrame,
+        reddit_comments_df: DataFrame,
         subreddit_topics_map_df: DataFrame,
         **kwargs,
     ):
@@ -38,7 +38,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 discussed in that subreddit
         """
 
-        self.reddid_comments_df = reddid_comments_df
+        self.reddit_comments_df = reddit_comments_df
         self.subreddit_topics_map_df = subreddit_topics_map_df
         super().__init__(**kwargs)
 
@@ -76,14 +76,10 @@ class TopicSpecificTrendingWordsQuery(Query):
             "subreddit", lower(col("subreddit"))
         )
 
-        return (
-            df.join(
-                broadcast(subreddit_topic_map_df),
-                on=["subreddit"],
-                how="left_outer",
-            )
-            .where(col("topic").isNotNull())
-            .withColumnRename("topic", "topics")
+        return df.join(
+            broadcast(subreddit_topic_map_df),
+            on=["subreddit"],
+            how="inner",
         )
 
     def tokenize_comment_body(self, df: DataFrame) -> DataFrame:
@@ -373,9 +369,7 @@ class TopicSpecificTrendingWordsQuery(Query):
     def run(self):
 
         word_usage_stats_df = (
-            self.reddid_comments_df.select(
-                "created_utc", "body", "permalink", "score", "subreddit"
-            )
+            self.reddit_comments_df.select("created_utc", "body", "subreddit")
             .transform(self.add_date_columns)
             .transform(self.filter_by_eligibility_dates)
             .transform(self.add_topics_column)
