@@ -6,10 +6,12 @@ from pyspark.sql.functions import (
     avg,
     broadcast,
     col,
+    concat,
     count,
     explode,
     from_unixtime,
     lag,
+    lit,
     lower,
     month,
     split,
@@ -269,7 +271,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 ),
             )
             .withColumn(
-                "specificity(frequency_in_topic/frequency)",
+                "topic_specificity",
                 (col("frequency_in_topic")) / (col("frequency")),
             )
             .select(
@@ -282,7 +284,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "daily_topic_word_count",
                 "frequency",
                 "frequency_in_topic",
-                "specificity(frequency_in_topic/frequency)",
+                "topic_specificity",
             )
         )
 
@@ -309,7 +311,7 @@ class TopicSpecificTrendingWordsQuery(Query):
             "daily_topic_word_count",
             "frequency",
             "frequency_in_topic",
-            "specificity(frequency_in_topic/frequency)",
+            "topic_specificity",
             "rolling_average_of_daily_frequency",
         )
 
@@ -340,10 +342,32 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "daily_topic_word_count",
                 "frequency",
                 "frequency_in_topic",
-                "specificity(frequency_in_topic/frequency)",
+                "topic_specificity",
                 "rolling_average_of_daily_frequency",
                 "change_in_rolling_average_of_daily_frequency",
             )
+        )
+
+    def add_id_column(df: DataFrame) -> DataFrame:
+        return df.withColumn(
+            "id",
+            concat(
+                col("topic"), lit("_"), col("word"), lit("_"), col("date")
+            ).select(
+                "topic",
+                "word",
+                "date",
+                "daily_word_occurence_per_topic",
+                "daily_word_occurence",
+                "total_daily_word_count",
+                "daily_topic_word_count",
+                "frequency",
+                "frequency_in_topic",
+                "topic_specificity",
+                "rolling_average_of_daily_frequency",
+                "change_in_rolling_average_of_daily_frequency",
+                "id",
+            ),
         )
 
     def run(self):
@@ -361,7 +385,9 @@ class TopicSpecificTrendingWordsQuery(Query):
             .transform(self.add_topic_frequency_and_specificity_columns)
             .transform(self.add_rolling_average_daily_frequency_column)
             .transform(self.add_change_in_rolling_average_column)
+            .transform(self.add_id_column)
             .select(
+                "id",
                 "topic",
                 "word",
                 "date",
@@ -371,7 +397,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "daily_topic_word_count",
                 "frequency",
                 "frequency_in_topic",
-                "specificity(frequency_in_topic/frequency)",
+                "topic_specificity",
                 "rolling_average_of_daily_frequency",
                 "change_in_rolling_average_of_daily_frequency",
             )
