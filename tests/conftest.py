@@ -17,7 +17,11 @@ from pyspark.sql.types import (
     StructField,
     StructType,
 )
-from pyspark_pipeline.utilities.settings_utils import Settings, SourceTable
+from pyspark_pipeline.utilities.settings_utils import (
+    Databases,
+    Settings,
+    SourceTable,
+)
 
 
 @pytest.fixture(scope="module")
@@ -32,21 +36,24 @@ def module_tmpdir():
 
 @pytest.fixture(scope="module")
 def settings_obj(module_tmpdir) -> Settings:
-    yaml_path = Path(__file__).parent / "data" / "test_override_settings.yaml"
-    with yaml_path.open() as f:
-        settings_obj = Settings(**yaml.safe_load(f))
-
-    settings_obj.source_tables = {
-        "fake_table": SourceTable(
-            table_type="fake_type",
-            location="fake_location",
+    settings_obj = Settings(
+        job_name="topical_terms",
+        include_start_date=datetime(2022, 1, 1, tzinfo=timezone.utc),
+        include_end_date=datetime(2023, 1, 1, tzinfo=timezone.utc),
+        source_tables={
+            "fake_table": SourceTable(
+                table_type="fake_type",
+                location="fake_location",
+            )
+        },
+        spark_configs={"spark.sql.shuffle.partitions": 1},
+        target_path=module_tmpdir,
+        hive_output_table_type=None,
+        databases=Databases(
+            source_db="fake_source_db", target_db="fake_target_db"
         ),
-    }
-    settings_obj.job_name = "fake_job"
-    settings_obj.elgblty_start_date = datetime(2021, 1, 1, tzinfo=timezone.utc)
-    settings_obj.elgblty_end_date = datetime(2023, 1, 1, tzinfo=timezone.utc)
-    settings_obj.hive_output_table_type = None
-    settings_obj.target_path = module_tmpdir
+    )
+
     return settings_obj
 
 
@@ -143,8 +150,8 @@ def excluded_date_two() -> datetime:
 
 
 @pytest.fixture(scope="module")
-def reddit_topics_df(local_spark: SparkSession) -> DataFrame:
-    StructType(
+def subreddit_topics_map_df(local_spark: SparkSession) -> DataFrame:
+    schema = StructType(
         [
             StructField("subreddit", StringType(), True),
             StructField("topics", StringType(), True),
@@ -173,7 +180,8 @@ def reddit_topics_df(local_spark: SparkSession) -> DataFrame:
                 "subreddit": "not_included",
                 "topics": "nuts,food",
             },
-        ]
+        ],
+        schema,
     )
 
 
@@ -188,8 +196,9 @@ def reddit_comments_df(
     def get_timestamp(dt: datetime) -> int:
         return int(time.mktime(dt.timetuple()))
 
-    StructType(
+    schema = StructType(
         [
+            StructField("author", StringType(), True),
             StructField("body", StringType(), True),
             StructField("created_utc", StringType(), True),
             StructField("subreddit", StringType(), True),
@@ -199,72 +208,80 @@ def reddit_comments_df(
     return local_spark.createDataFrame(  # type: ignore
         [
             {
+                "author": "neckbeard",
                 "body": "this comment should not make it in",
                 "created_utc": get_timestamp(excluded_date_one),
                 "subreddit": "not_included",
             },
             {
+                "author": "edgelord",
                 "body": "banana banana cherry pecan",
                 "created_utc": get_timestamp(included_date_one),
                 "subreddit": "fruits",
             },
             {
+                "author": "fruitposter",
                 "body": "cherry apple pecan",
                 "created_utc": get_timestamp(included_date_two),
                 "subreddit": "fruits",
             },
             {
+                "author": "sanenut",
                 "body": "walnut! pecan?",
                 "created_utc": get_timestamp(included_date_one),
                 "subreddit": "nuts",
             },
             {
+                "author": "nutlord",
                 "body": "walnut pecan",
                 "created_utc": get_timestamp(included_date_one),
                 "subreddit": "aww_nuts",
             },
             {
+                "author": "lovenuts",
                 "body": "walnut pecan",
                 "created_utc": get_timestamp(included_date_one),
                 "subreddit": "go_nuts",
             },
             {
+                "author": "elderposter",
                 "body": "this comment should not make it in!",
                 "created_utc": get_timestamp(excluded_date_two),
                 "subreddit": "not_included",
             },
-        ]
+        ],
+        schema,
     )
 
 
 @pytest.fixture(scope="module")
-def expected_topic_specific_trending_words(
+def expected_topic_specific_trending_words_df(
     local_spark: SparkSession,
     included_date_one: datetime,
     included_date_two: datetime,
     excluded_date_one: datetime,
     excluded_date_two: datetime,
 ) -> DataFrame:
-    StructType(
+    schema = StructType(
         [
             StructField(
                 "change_in_rolling_average_of_daily_frequency",
                 DoubleType(),
                 True,
             ),
-            StructField("date", StringType(), True),
             StructField("daily_topic_word_count", LongType(), True),
             StructField("daily_word_occurence_per_topic", LongType(), True),
             StructField("daily_word_occurence", LongType(), True),
+            StructField("date", StringType(), True),
             StructField("frequency", DoubleType(), True),
             StructField("frequency_in_topic", DoubleType(), True),
             StructField("id", StringType(), True),
             StructField(
                 "rolling_average_of_daily_frequency", DoubleType(), True
             ),
-            StructField("total_daily_word_count", LongType(), True),
             StructField("topic", StringType(), True),
             StructField("topic_specificity", DoubleType(), True),
+            StructField("total_daily_word_count", LongType(), True),
             StructField("word", StringType(), True),
         ]
     )
@@ -273,19 +290,82 @@ def expected_topic_specific_trending_words(
         return str(dt.date())
 
     return local_spark.createDataFrame(
-        {
-            "change_in_rolling_average_of_daily_frequency": 0.0,
-            "date": date_string(included_date_one),
-            "daily_topic_word_count": 10,
-            "daily_word_occurence_per_topic": 4,
-            "daily_word_occurence": 10,
-            "frequency": 0.40,
-            "frequency_in_topic": 0.40,
-            "id": f"pecan_food_{date_string(included_date_one)}",
-            "rolling_average_of_daily_frequency": 0.4,
-            "total_daily_word_count": 4,
-            "topic": "food",
-            "topic_specificity": 1.0,
-            "word": "pecan",
-        }
+        [
+            {
+                "change_in_rolling_average_of_daily_frequency": 0.2,
+                "daily_topic_word_count": 10,
+                "daily_word_occurence_per_topic": 2,
+                "daily_word_occurence": 4,
+                "date": date_string(included_date_one),
+                "frequency": 0.40,
+                "frequency_in_topic": 0.40,
+                "id": f"food_{date_string(included_date_one)}_banana",
+                "rolling_average_of_daily_frequency": 0.4,
+                "topic": "food",
+                "topic_specificity": 1.0,
+                "total_daily_word_count": 48,
+                "word": "banana",
+            },
+            {
+                "change_in_rolling_average_of_daily_frequency": 0.0,
+                "daily_topic_word_count": 10,
+                "daily_word_occurence_per_topic": 1,
+                "daily_word_occurence": 2,
+                "date": date_string(included_date_one),
+                "frequency": 0.40,
+                "frequency_in_topic": 0.40,
+                "id": f"food_{date_string(included_date_one)}_cherry",
+                "rolling_average_of_daily_frequency": 0.4,
+                "topic": "food",
+                "topic_specificity": 1.0,
+                "total_daily_word_count": 48,
+                "word": "cherry",
+            },
+            {
+                "change_in_rolling_average_of_daily_frequency": 0.0,
+                "daily_topic_word_count": 10,
+                "daily_word_occurence_per_topic": 4,
+                "daily_word_occurence": 8,
+                "date": date_string(included_date_one),
+                "frequency": 0.40,
+                "frequency_in_topic": 0.40,
+                "id": f"food_{date_string(included_date_one)}_pecan",
+                "rolling_average_of_daily_frequency": 0.4,
+                "topic": "food",
+                "topic_specificity": 1.0,
+                "total_daily_word_count": 48,
+                "word": "pecan",
+            },
+            {
+                "change_in_rolling_average_of_daily_frequency": 0.0,
+                "daily_topic_word_count": 10,
+                "daily_word_occurence_per_topic": 3,
+                "daily_word_occurence": 6,
+                "date": date_string(included_date_one),
+                "frequency": 0.40,
+                "frequency_in_topic": 0.40,
+                "id": f"food_{date_string(included_date_one)}_walnut",
+                "rolling_average_of_daily_frequency": 0.4,
+                "topic": "food",
+                "topic_specificity": 1.0,
+                "total_daily_word_count": 48,
+                "word": "walnut",
+            },
+            {
+                "change_in_rolling_average_of_daily_frequency": 0.0,
+                "daily_topic_word_count": 10,
+                "daily_word_occurence_per_topic": 1,
+                "daily_word_occurence": 2,
+                "date": date_string(included_date_one),
+                "frequency": 0.40,
+                "frequency_in_topic": 0.40,
+                "id": f"food_{date_string(included_date_one)}_walnut",
+                "rolling_average_of_daily_frequency": 0.4,
+                "topic": "food",
+                "topic_specificity": 1.0,
+                "total_daily_word_count": 12,
+                "word": "apple",
+            },
+        ],
+        schema,
     )

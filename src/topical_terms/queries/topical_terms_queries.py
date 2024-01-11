@@ -3,6 +3,7 @@ from typing import List
 from pyspark.ml.feature import StopWordsRemover, Tokenizer
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import (
+    array_distinct,
     avg,
     broadcast,
     col,
@@ -13,7 +14,6 @@ from pyspark.sql.functions import (
     lag,
     lit,
     lower,
-    month,
     split,
     sum,
     to_date,
@@ -42,6 +42,16 @@ class TopicSpecificTrendingWordsQuery(Query):
         self.subreddit_topics_map_df = subreddit_topics_map_df
         super().__init__(**kwargs)
 
+    def add_comment_id_column(self, df: DataFrame) -> DataFrame:
+        return df.withColumn(
+            "comment_id", concat(col("author"), lit("_"), col("created_utc"))
+        ).select(
+            "body",
+            "comment_id",
+            "created_utc",
+            "subreddit",
+        )
+
     def add_date_columns(self, df: DataFrame) -> DataFrame:
         """
         Comments are aggregated with different date grain
@@ -51,14 +61,19 @@ class TopicSpecificTrendingWordsQuery(Query):
         return (
             df.withColumn("date_time", from_unixtime("created_utc"))
             .withColumn("date", to_date(col("date_time")))
-            .withColumn("month", month(to_date(col("date_time"))))
+            .select(
+                "comment_id",
+                "body",
+                "date",
+                "subreddit",
+            )
         )
 
     def filter_by_eligibility_dates(self, df: DataFrame) -> DataFrame:
         return df.where(
             col("date").between(
-                self.settings.elgblty_start_date,
-                self.settings.elgblty_end_date,
+                self.settings.include_start_date,
+                self.settings.include_end_date,
             )
         )
 
@@ -80,6 +95,12 @@ class TopicSpecificTrendingWordsQuery(Query):
             broadcast(subreddit_topic_map_df),
             on=["subreddit"],
             how="inner",
+        ).select(
+            "comment_id",
+            "body",
+            "date",
+            "subreddit",
+            "topics",
         )
 
     def tokenize_comment_body(self, df: DataFrame) -> DataFrame:
@@ -89,7 +110,7 @@ class TopicSpecificTrendingWordsQuery(Query):
         df = df.withColumn("body", lower(col("body")))
         tokenizer = Tokenizer(inputCol="body", outputCol="words_token")
         return tokenizer.transform(df).select(
-            "topics", "date_time", "month", "date", "words_token"
+            "comment_id", "topics", "date", "words_token"
         )
 
     def remove_comment_stop_words(self, df: DataFrame) -> DataFrame:
@@ -101,28 +122,34 @@ class TopicSpecificTrendingWordsQuery(Query):
         )
 
         return remover.transform(df).select(
-            "topics", "words_no_stops", "date_time", "month", "date"
+            "comment_id",
+            "topics",
+            "date",
+            "words_no_stops",
         )
 
     def split_words_column(self, df: DataFrame) -> DataFrame:
         """
         Some tokens still contain punctuation this method
         further cleans punctuation and produces a cleaned 'word' column
+
+        Drop duplicates
         """
         return (
             df.withColumn("words_and_punct", explode("words_no_stops"))
             .withColumn(
-                "word", explode(split(col("words_and_punct"), "[\\W_]+"))
-            )
-            .select(
-                "topics",
                 "word",
-                "date_time",
-                "month",
-                "date",
+                explode(
+                    array_distinct(split(col("words_and_punct"), "[\\W_]+"))
+                ),
             )
             .where(col("word").rlike("[a-zA-Z]"))
-            .dropDuplicates()
+            .select(
+                "comment_id",
+                "topics",
+                "word",
+                "date",
+            )
         )
 
     def add_word_column(self, df: DataFrame) -> DataFrame:
@@ -130,7 +157,7 @@ class TopicSpecificTrendingWordsQuery(Query):
             df.transform(self.tokenize_comment_body)
             .transform(self.remove_comment_stop_words)
             .transform(self.split_words_column)
-            .select("topics", "word", "date_time", "month", "date")
+            .select("comment_id", "topics", "word", "date")
         )
 
     def explode_topics_column_into_topic_column(
@@ -139,23 +166,16 @@ class TopicSpecificTrendingWordsQuery(Query):
         """
         Some subreddits relate to multiple topics separated by commas
         """
+
         return (
             df.withColumn("raw_topic", explode(split(col("topics"), ",")))
             .withColumn("topic", trim(lower(col("raw_topic"))))
             .select(
+                "comment_id",
                 "topic",
                 "word",
-                "date_time",
-                "month",
                 "date",
             )
-        )
-
-    def get_daily_word_occurence_per_topic(self, df: DataFrame) -> DataFrame:
-        return (
-            df.groupBy("date", "word", "topic")
-            .agg(count().alias("daily_word_occurence_per_topic"))
-            .select("topic", "word", "date", "daily_word_occurence_per_topic")
         )
 
     def sum_column(
@@ -180,33 +200,67 @@ class TopicSpecificTrendingWordsQuery(Query):
             how="inner",
         )
 
-    def get_daily_word_occurence(self, df: DataFrame) -> DataFrame:
-        return self.sum_column(
-            df,
-            col_to_sum="daily_word_occurence_per_topic",
-            group_by_cols=["date", "word"],
-            new_col_name="daily_word_occurence",
-        ).select(
-            "topic",
-            "word",
-            "date",
-            "daily_word_occurence_per_topic",
-            "daily_word_occurence",
+    def get_daily_word_occurence_and_count(self, df: DataFrame) -> DataFrame:
+        partition_num = self.settings.spark_configs.get(
+            "spark.sql.shuffle.partitions", 9600
+        )
+        df = df.repartition(partition_num, ["date", "word"])
+
+        word_occurence_df = (
+            df.select(
+                "comment_id",
+                "word",
+                "date",
+            )
+            .distinct()
+            .groupBy(
+                "date",
+                "word",
+            )
+            .agg(count("word").alias("daily_word_occurence"))
+            .select("date", "word", "daily_word_occurence")
         )
 
-    def get_total_daily_word_count(self, df) -> DataFrame:
-        return self.add_count_column(
-            df,
+        total_daily_word_count_df = self.sum_column(
+            word_occurence_df,
             col_to_sum="daily_word_occurence",
             group_by_cols=["date"],
             new_col_name="total_daily_word_count",
         ).select(
-            "topic",
             "word",
             "date",
-            "daily_word_occurence_per_topic",
             "daily_word_occurence",
             "total_daily_word_count",
+        )
+
+        return df.join(
+            total_daily_word_count_df, on=["date", "word"], how="inner"
+        ).select(
+            "date",
+            "word",
+            "topic",
+            "daily_word_occurence",
+            "total_daily_word_count",
+        )
+
+    def get_daily_word_occurence_per_topic(self, df: DataFrame) -> DataFrame:
+        return (
+            df.groupBy(
+                "date",
+                "word",
+                "daily_word_occurence",
+                "total_daily_word_count",
+                "topic",
+            )
+            .agg(count("word").alias("daily_word_occurence_per_topic"))
+            .select(
+                "topic",
+                "word",
+                "date",
+                "daily_word_occurence",
+                "daily_word_occurence_per_topic",
+                "total_daily_word_count",
+            )
         )
 
     def get_topic_daily_word_count(self, df: DataFrame) -> DataFrame:
@@ -234,9 +288,8 @@ class TopicSpecificTrendingWordsQuery(Query):
         number of shuffles needed to complete the counts
         """
         return (
-            df.transform(self.get_daily_word_occurence_per_topic)
-            .transform(self.get_daily_word_occurence)
-            .transform(self.get_total_daily_word_count)
+            df.transform(self.get_daily_word_occurence_and_count)
+            .transform(self.get_daily_word_occurence_per_topic)
             .transform(self.get_topic_daily_word_count)
             .select(
                 "topic",
@@ -296,7 +349,7 @@ class TopicSpecificTrendingWordsQuery(Query):
 
         return df.withColumn(
             "rolling_average_of_daily_frequency",
-            avg("freq_in_topic").over(four_day_window),
+            avg("frequency_in_topic").over(four_day_window),
         ).select(
             "topic",
             "word",
@@ -317,10 +370,12 @@ class TopicSpecificTrendingWordsQuery(Query):
         return (
             df.withColumn(
                 "prev_day_rolling_average",
-                lag(df["daily_freq_rolling_average"]).over(one_day_window),
+                lag(df["rolling_average_of_daily_frequency"]).over(
+                    one_day_window
+                ),
             )
             .withColumn(
-                "change_in_daily_average",
+                "change_in_rolling_average_of_daily_frequency",
                 (
                     (
                         col("rolling_average_of_daily_frequency")
@@ -344,32 +399,33 @@ class TopicSpecificTrendingWordsQuery(Query):
             )
         )
 
-    def add_id_column(df: DataFrame) -> DataFrame:
+    def add_id_column(self, df: DataFrame) -> DataFrame:
         return df.withColumn(
             "id",
-            concat(
-                col("topic"), lit("_"), col("word"), lit("_"), col("date")
-            ).select(
-                "topic",
-                "word",
-                "date",
-                "daily_word_occurence_per_topic",
-                "daily_word_occurence",
-                "total_daily_word_count",
-                "daily_topic_word_count",
-                "frequency",
-                "frequency_in_topic",
-                "topic_specificity",
-                "rolling_average_of_daily_frequency",
-                "change_in_rolling_average_of_daily_frequency",
-                "id",
-            ),
+            concat(col("topic"), lit("_"), col("date"), lit("_"), col("word")),
+        ).select(
+            "topic",
+            "word",
+            "date",
+            "daily_word_occurence_per_topic",
+            "daily_word_occurence",
+            "total_daily_word_count",
+            "daily_topic_word_count",
+            "frequency",
+            "frequency_in_topic",
+            "topic_specificity",
+            "rolling_average_of_daily_frequency",
+            "change_in_rolling_average_of_daily_frequency",
+            "id",
         )
 
     def run(self):
 
         word_usage_stats_df = (
-            self.reddit_comments_df.select("created_utc", "body", "subreddit")
+            self.reddit_comments_df.select(
+                "author", "body", "created_utc", "subreddit"
+            )
+            .transform(self.add_comment_id_column)
             .transform(self.add_date_columns)
             .transform(self.filter_by_eligibility_dates)
             .transform(self.add_topics_column)
@@ -396,4 +452,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "change_in_rolling_average_of_daily_frequency",
             )
         )
-        return word_usage_stats_df.select(self.schema.get_columns_list())
+
+        return self.enforce_schema_and_uniqueness(
+            word_usage_stats_df, self.schema
+        )
