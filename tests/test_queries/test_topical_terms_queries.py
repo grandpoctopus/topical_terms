@@ -1065,6 +1065,58 @@ class TestUnitTopicSpecificTrendingWordsQuery:
             order_by=["date", "topic", "word"],
         )
 
+    @pytest.fixture()
+    def rolling_average_df(self, local_spark: SparkSession) -> DataFrame:
+        schema = StructType(
+            [
+                StructField("topic", StringType(), True),
+                StructField("date", StringType(), True),
+                StructField("word", StringType(), True),
+                StructField("daily_word_occurence", LongType(), True),
+                StructField("total_daily_word_count", LongType(), True),
+                StructField("daily_word_occurence_in_topic", LongType(), True),
+                StructField("topic_daily_word_count", LongType(), True),
+                StructField("frequency", DoubleType(), True),
+                StructField("frequency_in_topic", DoubleType(), True),
+                StructField("topic_specificity", DoubleType(), True),
+                StructField(
+                    "rolling_average_of_daily_frequency", DoubleType(), True
+                ),
+            ]
+        )
+
+        return local_spark.createDataFrame(
+            [
+                {
+                    "topic": "food",
+                    "date": "2022-01-01",
+                    "word": "banana",
+                    "daily_word_occurence": 2,
+                    "total_daily_word_count": 20,
+                    "daily_word_occurence_in_topic": 2,
+                    "topic_daily_word_count": 10,
+                    "frequency": 0.10,
+                    "frequency_in_topic": 0.20,
+                    "topic_specificity": 2.0,
+                    "rolling_average_of_daily_frequency": 0.20,
+                },
+                {
+                    "topic": "food",
+                    "date": "2022-01-02",
+                    "word": "banana",
+                    "daily_word_occurence": 4,
+                    "total_daily_word_count": 20,
+                    "daily_word_occurence_in_topic": 3,
+                    "topic_daily_word_count": 10,
+                    "frequency": 0.20,
+                    "frequency_in_topic": 0.30,
+                    "topic_specificity": 1.4999999999999998,
+                    "rolling_average_of_daily_frequency": 0.25,
+                },
+            ],
+            schema,
+        )
+
     def test_add_rolling_average_daily_frequency_column(
         self,
         query: TopicSpecificTrendingWordsQuery,
@@ -1079,13 +1131,86 @@ class TestUnitTopicSpecificTrendingWordsQuery:
             order_by=["date", "topic", "word"],
         )
 
+    @pytest.fixture()
+    def change_in_rolling_average_df(
+        self, local_spark: SparkSession
+    ) -> DataFrame:
+        schema = StructType(
+            [
+                StructField("topic", StringType(), True),
+                StructField("date", StringType(), True),
+                StructField("word", StringType(), True),
+                StructField("daily_word_occurence", LongType(), True),
+                StructField("total_daily_word_count", LongType(), True),
+                StructField("daily_word_occurence_in_topic", LongType(), True),
+                StructField("topic_daily_word_count", LongType(), True),
+                StructField("frequency", DoubleType(), True),
+                StructField("frequency_in_topic", DoubleType(), True),
+                StructField("topic_specificity", DoubleType(), True),
+                StructField(
+                    "rolling_average_of_daily_frequency", DoubleType(), True
+                ),
+                StructField(
+                    "change_in_rolling_average_of_daily_frequency",
+                    DoubleType(),
+                    True,
+                ),
+            ]
+        )
+
+        return local_spark.createDataFrame(
+            [
+                {
+                    "topic": "food",
+                    "date": "2022-01-01",
+                    "word": "banana",
+                    "daily_word_occurence": 2,
+                    "total_daily_word_count": 20,
+                    "daily_word_occurence_in_topic": 2,
+                    "topic_daily_word_count": 10,
+                    "frequency": 0.10,
+                    "frequency_in_topic": 0.20,
+                    "topic_specificity": 2.0,
+                    "rolling_average_of_daily_frequency": 0.20,
+                    "change_in_rolling_average_of_daily_frequency": None,
+                },
+                {
+                    "topic": "food",
+                    "date": "2022-01-02",
+                    "word": "banana",
+                    "daily_word_occurence": 4,
+                    "total_daily_word_count": 20,
+                    "daily_word_occurence_in_topic": 3,
+                    "topic_daily_word_count": 10,
+                    "frequency": 0.20,
+                    "frequency_in_topic": 0.30,
+                    "topic_specificity": 1.4999999999999998,
+                    "rolling_average_of_daily_frequency": 0.25,
+                    "change_in_rolling_average_of_daily_frequency": 0.04999999999999999,
+                },
+            ],
+            schema,
+        )
+
+    def test_add_change_in_rolling_average_column(
+        self,
+        query: TopicSpecificTrendingWordsQuery,
+        rolling_average_df: DataFrame,
+        change_in_rolling_average_df: DataFrame,
+    ):
+        assert_pyspark_df_equal(
+            query.add_change_in_rolling_average_column(
+                rolling_average_df,
+            ),
+            change_in_rolling_average_df,
+            order_by=["date", "topic", "word"],
+        )
+
     def test_run(
         self,
         query: TopicSpecificTrendingWordsQuery,
         expected_topic_specific_trending_words_df: DataFrame,
     ):
-        # query.run()
-        # assert False
         assert_pyspark_df_equal(
             query.run(),
             expected_topic_specific_trending_words_df,
