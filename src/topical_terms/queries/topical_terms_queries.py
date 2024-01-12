@@ -340,7 +340,7 @@ class TopicSpecificTrendingWordsQuery(Query):
             )
         )
 
-    def add_rolling_average_daily_frequency_column(
+    def add_five_day_average_of_frequency_in_topic_column(
         self, df: DataFrame
     ) -> DataFrame:
 
@@ -351,7 +351,7 @@ class TopicSpecificTrendingWordsQuery(Query):
         )
 
         return df.withColumn(
-            "rolling_average_of_daily_frequency",
+            "five_day_average_of_frequency_in_topic",
             avg("frequency_in_topic").over(four_day_window),
         ).select(
             "topic",
@@ -364,24 +364,26 @@ class TopicSpecificTrendingWordsQuery(Query):
             "frequency",
             "frequency_in_topic",
             "topic_specificity",
-            "rolling_average_of_daily_frequency",
+            "five_day_average_of_frequency_in_topic",
         )
 
-    def add_change_in_rolling_average_column(self, df: DataFrame) -> DataFrame:
+    def add_daily_change_in_average_frequency_in_topic_column(
+        self, df: DataFrame
+    ) -> DataFrame:
         one_day_window = Window.partitionBy(["topic", "word"]).orderBy("date")
 
         return (
             df.withColumn(
                 "prev_day_rolling_average",
-                lag(df["rolling_average_of_daily_frequency"]).over(
+                lag(df["five_day_average_of_frequency_in_topic"]).over(
                     one_day_window
                 ),
             )
             .withColumn(
-                "change_in_rolling_average_of_daily_frequency",
+                "change_in_average_of_frequency_in_topic",
                 (
                     (
-                        col("rolling_average_of_daily_frequency")
+                        col("five_day_average_of_frequency_in_topic")
                         - col("prev_day_rolling_average")
                     )
                 ),
@@ -397,8 +399,8 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "frequency",
                 "frequency_in_topic",
                 "topic_specificity",
-                "rolling_average_of_daily_frequency",
-                "change_in_rolling_average_of_daily_frequency",
+                "five_day_average_of_frequency_in_topic",
+                "change_in_average_of_frequency_in_topic",
             )
         )
 
@@ -417,8 +419,8 @@ class TopicSpecificTrendingWordsQuery(Query):
             "frequency",
             "frequency_in_topic",
             "topic_specificity",
-            "rolling_average_of_daily_frequency",
-            "change_in_rolling_average_of_daily_frequency",
+            "five_day_average_of_frequency_in_topic",
+            "change_in_average_of_frequency_in_topic",
             "id",
         )
 
@@ -436,8 +438,10 @@ class TopicSpecificTrendingWordsQuery(Query):
             .transform(self.explode_topics_column_into_topic_column)
             .transform(self.add_word_count_columns)
             .transform(self.add_topic_frequency_and_specificity_columns)
-            .transform(self.add_rolling_average_daily_frequency_column)
-            .transform(self.add_change_in_rolling_average_column)
+            .transform(self.add_five_day_average_of_frequency_in_topic_column)
+            .transform(
+                self.add_daily_change_in_average_frequency_in_topic_column
+            )
             .transform(self.add_id_column)
             .select(
                 "id",
@@ -451,8 +455,8 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "frequency",
                 "frequency_in_topic",
                 "topic_specificity",
-                "rolling_average_of_daily_frequency",
-                "change_in_rolling_average_of_daily_frequency",
+                "five_day_average_of_frequency_in_topic",
+                "change_in_average_of_frequency_in_topic",
             )
         )
 

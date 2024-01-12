@@ -1080,7 +1080,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                 StructField("frequency_in_topic", DoubleType(), True),
                 StructField("topic_specificity", DoubleType(), True),
                 StructField(
-                    "rolling_average_of_daily_frequency", DoubleType(), True
+                    "five_day_average_of_frequency_in_topic", DoubleType(), True
                 ),
             ]
         )
@@ -1098,7 +1098,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                     "frequency": 0.10,
                     "frequency_in_topic": 0.20,
                     "topic_specificity": 2.0,
-                    "rolling_average_of_daily_frequency": 0.20,
+                    "five_day_average_of_frequency_in_topic": 0.20,
                 },
                 {
                     "topic": "food",
@@ -1111,20 +1111,20 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                     "frequency": 0.20,
                     "frequency_in_topic": 0.30,
                     "topic_specificity": 1.4999999999999998,
-                    "rolling_average_of_daily_frequency": 0.25,
+                    "five_day_average_of_frequency_in_topic": 0.25,
                 },
             ],
             schema,
         )
 
-    def test_add_rolling_average_daily_frequency_column(
+    def test_add_add_five_day_average_of_frequency_in_topic_column(
         self,
         query: TopicSpecificTrendingWordsQuery,
         frequency_and_specificity_df: DataFrame,
         rolling_average_df: DataFrame,
     ):
         assert_pyspark_df_equal(
-            query.add_rolling_average_daily_frequency_column(
+            query.add_five_day_average_of_frequency_in_topic_column(
                 frequency_and_specificity_df
             ),
             rolling_average_df,
@@ -1148,10 +1148,10 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                 StructField("frequency_in_topic", DoubleType(), True),
                 StructField("topic_specificity", DoubleType(), True),
                 StructField(
-                    "rolling_average_of_daily_frequency", DoubleType(), True
+                    "five_day_average_of_frequency_in_topic", DoubleType(), True
                 ),
                 StructField(
-                    "change_in_rolling_average_of_daily_frequency",
+                    "change_in_average_of_frequency_in_topic",
                     DoubleType(),
                     True,
                 ),
@@ -1171,8 +1171,8 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                     "frequency": 0.10,
                     "frequency_in_topic": 0.20,
                     "topic_specificity": 2.0,
-                    "rolling_average_of_daily_frequency": 0.20,
-                    "change_in_rolling_average_of_daily_frequency": None,
+                    "five_day_average_of_frequency_in_topic": 0.20,
+                    "change_in_average_of_frequency_in_topic": None,
                 },
                 {
                     "topic": "food",
@@ -1185,21 +1185,21 @@ class TestUnitTopicSpecificTrendingWordsQuery:
                     "frequency": 0.20,
                     "frequency_in_topic": 0.30,
                     "topic_specificity": 1.4999999999999998,
-                    "rolling_average_of_daily_frequency": 0.25,
-                    "change_in_rolling_average_of_daily_frequency": 0.04999999999999999,
+                    "five_day_average_of_frequency_in_topic": 0.25,
+                    "change_in_average_of_frequency_in_topic": 0.04999999999999999,
                 },
             ],
             schema,
         )
 
-    def test_add_change_in_rolling_average_column(
+    def test_add_daily_change_in_average_frequency_in_topic_column(
         self,
         query: TopicSpecificTrendingWordsQuery,
         rolling_average_df: DataFrame,
         change_in_rolling_average_df: DataFrame,
     ):
         assert_pyspark_df_equal(
-            query.add_change_in_rolling_average_column(
+            query.add_daily_change_in_average_frequency_in_topic_column(
                 rolling_average_df,
             ),
             change_in_rolling_average_df,
