@@ -34,6 +34,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
         query: TopicSpecificTrendingWordsQuery,
         expected_topic_specific_trending_words_df: DataFrame,
     ):
+
         assert_pyspark_df_equal(
             query.run(),
             expected_topic_specific_trending_words_df,

@@ -3,7 +3,6 @@ from typing import List
 from pyspark.ml.feature import StopWordsRemover, Tokenizer
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import (
-    array_distinct,
     avg,
     broadcast,
     col,
@@ -138,11 +137,9 @@ class TopicSpecificTrendingWordsQuery(Query):
         return (
             df.withColumn("words_and_punct", explode("words_no_stops"))
             .withColumn(
-                "word",
-                explode(
-                    array_distinct(split(col("words_and_punct"), "[\\W_]+"))
-                ),
+                "raw_word", explode(split(col("words_and_punct"), "[\\W_]+"))
             )
+            .withColumn("word", trim(col("raw_word")))
             .where(col("word").rlike("[a-zA-Z]"))
             .select(
                 "comment_id",
@@ -150,6 +147,7 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "word",
                 "date",
             )
+            .distinct()
         )
 
     def add_word_column(self, df: DataFrame) -> DataFrame:
