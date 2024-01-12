@@ -15,6 +15,7 @@ class TopicalTermsJob(Job):
         reddit_comments_df: DataFrame,
         subreddit_topics_map_df: DataFrame,
         audit_df: DataFrame,
+        settings: Settings,
         **kwargs,
     ):
         """
@@ -25,6 +26,7 @@ class TopicalTermsJob(Job):
                 discussed in that subreddit
         """
         super().__init__(**kwargs)
+        self.settings = settings
         self.reddit_comments_df = reddit_comments_df
         self.subreddit_topics_map_df = subreddit_topics_map_df
         if audit_df is None:

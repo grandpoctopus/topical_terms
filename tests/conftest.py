@@ -259,8 +259,6 @@ def expected_topic_specific_trending_words_df(
     local_spark: SparkSession,
     included_date_one: datetime,
     included_date_two: datetime,
-    excluded_date_one: datetime,
-    excluded_date_two: datetime,
 ) -> DataFrame:
     schema = StructType(
         [
