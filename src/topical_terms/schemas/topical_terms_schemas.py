@@ -3,9 +3,9 @@ from pyspark_pipeline.schemas import EtlSchema
 
 class TopicSpecificTrendingWordsSchema(EtlSchema):
     change_in_rolling_average_of_daily_frequency = "double"
-    daily_topic_word_count = "bigint"
+    topic_daily_word_count = "bigint"
     daily_word_occurence = "bigint"
-    daily_word_occurence_per_topic = "bigint"
+    daily_word_occurence_in_topic = "bigint"
     date = "string"
     frequency = "double"
     frequency_in_topic = "double"

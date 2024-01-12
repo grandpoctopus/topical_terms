@@ -85,7 +85,6 @@ class TopicSpecificTrendingWordsQuery(Query):
         and splits topics to individual rows. This function
         will increase the number of rows.
         """
-        df = df.withColumn("subreddit", lower(col("subreddit")))
         subreddit_topic_map_df = self.subreddit_topics_map_df.withColumn(
             "subreddit", lower(col("subreddit"))
         )
@@ -106,7 +105,6 @@ class TopicSpecificTrendingWordsQuery(Query):
         """
         splits the comments into individual words
         """
-        df = df.withColumn("body", lower(col("body")))
         tokenizer = Tokenizer(inputCol="body", outputCol="words_token")
         return tokenizer.transform(df).select(
             "comment_id", "topics", "date", "words_token"
@@ -116,6 +114,7 @@ class TopicSpecificTrendingWordsQuery(Query):
         """
         Removes stop words like 'and', 'the' etc. from comments
         """
+
         remover = StopWordsRemover(
             inputCol="words_token", outputCol="words_no_stops"
         )
@@ -134,6 +133,7 @@ class TopicSpecificTrendingWordsQuery(Query):
 
         Drop duplicates
         """
+
         return (
             df.withColumn("words_and_punct", explode("words_no_stops"))
             .withColumn(
@@ -198,7 +198,9 @@ class TopicSpecificTrendingWordsQuery(Query):
             how="inner",
         )
 
-    def get_daily_word_occurence_and_count(self, df: DataFrame) -> DataFrame:
+    def add_daily_word_occurence_and_count_columns(
+        self, df: DataFrame
+    ) -> DataFrame:
         partition_num = self.settings.spark_configs.get(
             "spark.sql.shuffle.partitions", 9600
         )
@@ -241,7 +243,10 @@ class TopicSpecificTrendingWordsQuery(Query):
             "total_daily_word_count",
         )
 
-    def get_daily_word_occurence_per_topic(self, df: DataFrame) -> DataFrame:
+    def add_daily_word_occurence_in_topic_column(
+        self, df: DataFrame
+    ) -> DataFrame:
+
         return (
             df.groupBy(
                 "date",
@@ -250,31 +255,31 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "total_daily_word_count",
                 "topic",
             )
-            .agg(count("word").alias("daily_word_occurence_per_topic"))
+            .agg(count("word").alias("daily_word_occurence_in_topic"))
             .select(
                 "topic",
                 "word",
                 "date",
                 "daily_word_occurence",
-                "daily_word_occurence_per_topic",
+                "daily_word_occurence_in_topic",
                 "total_daily_word_count",
             )
         )
 
-    def get_topic_daily_word_count(self, df: DataFrame) -> DataFrame:
+    def add_topic_daily_word_count_column(self, df: DataFrame) -> DataFrame:
         return self.sum_column(
             df,
-            col_to_sum="daily_word_occurence_per_topic",
+            col_to_sum="daily_word_occurence_in_topic",
             group_by_cols=["date", "topic"],
-            new_col_name="daily_topic_word_count",
+            new_col_name="topic_daily_word_count",
         ).select(
             "topic",
             "word",
             "date",
-            "daily_word_occurence_per_topic",
+            "daily_word_occurence_in_topic",
             "daily_word_occurence",
             "total_daily_word_count",
-            "daily_topic_word_count",
+            "topic_daily_word_count",
         )
 
     def add_word_count_columns(self, df: DataFrame) -> DataFrame:
@@ -286,17 +291,17 @@ class TopicSpecificTrendingWordsQuery(Query):
         number of shuffles needed to complete the counts
         """
         return (
-            df.transform(self.get_daily_word_occurence_and_count)
-            .transform(self.get_daily_word_occurence_per_topic)
-            .transform(self.get_topic_daily_word_count)
+            df.transform(self.add_daily_word_occurence_and_count_columns)
+            .transform(self.add_daily_word_occurence_in_topic_column)
+            .transform(self.add_topic_daily_word_count_column)
             .select(
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_per_topic",
+                "daily_word_occurence_in_topic",
                 "daily_word_occurence",
                 "total_daily_word_count",
-                "daily_topic_word_count",
+                "topic_daily_word_count",
             )
         )
 
@@ -312,8 +317,8 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "frequency_in_topic",
                 (
                     (
-                        col("daily_word_occurence_per_topic")
-                        / col("daily_topic_word_count")
+                        col("daily_word_occurence_in_topic")
+                        / col("topic_daily_word_count")
                     )
                 ),
             )
@@ -325,10 +330,10 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_per_topic",
+                "daily_word_occurence_in_topic",
                 "daily_word_occurence",
                 "total_daily_word_count",
-                "daily_topic_word_count",
+                "topic_daily_word_count",
                 "frequency",
                 "frequency_in_topic",
                 "topic_specificity",
@@ -352,10 +357,10 @@ class TopicSpecificTrendingWordsQuery(Query):
             "topic",
             "word",
             "date",
-            "daily_word_occurence_per_topic",
+            "daily_word_occurence_in_topic",
             "daily_word_occurence",
             "total_daily_word_count",
-            "daily_topic_word_count",
+            "topic_daily_word_count",
             "frequency",
             "frequency_in_topic",
             "topic_specificity",
@@ -385,10 +390,10 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_per_topic",
+                "daily_word_occurence_in_topic",
                 "daily_word_occurence",
                 "total_daily_word_count",
-                "daily_topic_word_count",
+                "topic_daily_word_count",
                 "frequency",
                 "frequency_in_topic",
                 "topic_specificity",
@@ -405,10 +410,10 @@ class TopicSpecificTrendingWordsQuery(Query):
             "topic",
             "word",
             "date",
-            "daily_word_occurence_per_topic",
+            "daily_word_occurence_in_topic",
             "daily_word_occurence",
             "total_daily_word_count",
-            "daily_topic_word_count",
+            "topic_daily_word_count",
             "frequency",
             "frequency_in_topic",
             "topic_specificity",
@@ -439,10 +444,10 @@ class TopicSpecificTrendingWordsQuery(Query):
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_per_topic",
+                "daily_word_occurence_in_topic",
                 "daily_word_occurence",
                 "total_daily_word_count",
-                "daily_topic_word_count",
+                "topic_daily_word_count",
                 "frequency",
                 "frequency_in_topic",
                 "topic_specificity",
