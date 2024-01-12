@@ -11,15 +11,11 @@ from pyspark.sql.types import (
 from pyspark_pipeline.utilities.settings_utils import Settings
 from pyspark_test import assert_pyspark_df_equal
 
-from topical_terms.queries.topical_terms_queries import (
-    TopicSpecificTrendingWordsQuery,
-)
-from topical_terms.schemas.topical_terms_schemas import (
-    TopicSpecificTrendingWordsSchema,
-)
+from topical_terms.queries.topical_terms_queries import TopicalTermsQuery
+from topical_terms.schemas.topical_terms_schemas import TopicalTermsSchema
 
 
-class TestUnitTopicSpecificTrendingWordsQuery:
+class TestUnitTopicalTermsQuery:
     @pytest.fixture()
     def query(
         self,
@@ -27,12 +23,12 @@ class TestUnitTopicSpecificTrendingWordsQuery:
         settings_obj: Settings,
         reddit_comments_df,
         subreddit_topics_map_df,
-    ) -> TopicSpecificTrendingWordsQuery:
+    ) -> TopicalTermsQuery:
 
-        return TopicSpecificTrendingWordsQuery(
+        return TopicalTermsQuery(
             spark=local_spark,
             settings=settings_obj,
-            schema=TopicSpecificTrendingWordsSchema(),
+            schema=TopicalTermsSchema(),
             subreddit_topics_map_df=subreddit_topics_map_df,
             reddit_comments_df=reddit_comments_df,
         )
@@ -141,7 +137,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_tokenize_comment_body(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         topics_column_df: DataFrame,
         tokenize_comment_body_df: DataFrame,
     ):
@@ -200,7 +196,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_remove_comment_stop_words(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         tokenize_comment_body_df: DataFrame,
         remove_stop_words_df: DataFrame,
     ):
@@ -289,7 +285,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_split_words_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         remove_stop_words_df: DataFrame,
         word_column_df: DataFrame,
     ):
@@ -301,7 +297,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_word_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         topics_column_df: DataFrame,
         word_column_df: DataFrame,
     ):
@@ -450,7 +446,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_explode_topics_column_into_topic_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         word_column_df: DataFrame,
         topic_column_df: DataFrame,
     ):
@@ -620,7 +616,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_daily_word_occurence_and_count_columns(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         word_occurence_df: DataFrame,
         topic_column_df: DataFrame,
     ):
@@ -773,7 +769,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_daily_word_occurence_in_topic_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         word_occurence_df: DataFrame,
         word_occurence_in_topic_df: DataFrame,
     ):
@@ -940,7 +936,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_topic_daily_word_count_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         word_occurence_in_topic_df: DataFrame,
         topic_daily_word_count_df: DataFrame,
     ):
@@ -952,7 +948,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_word_count_columns(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         topic_column_df: DataFrame,
         topic_daily_word_count_df: DataFrame,
     ):
@@ -1053,7 +1049,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_topic_frequency_and_specificity_columns(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         small_topic_daily_word_count_df: DataFrame,
         frequency_and_specificity_df: DataFrame,
     ):
@@ -1119,7 +1115,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_add_five_day_average_of_frequency_in_topic_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         frequency_and_specificity_df: DataFrame,
         rolling_average_df: DataFrame,
     ):
@@ -1194,7 +1190,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_add_daily_change_in_average_frequency_in_topic_column(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         rolling_average_df: DataFrame,
         change_in_rolling_average_df: DataFrame,
     ):
@@ -1208,7 +1204,7 @@ class TestUnitTopicSpecificTrendingWordsQuery:
 
     def test_run(
         self,
-        query: TopicSpecificTrendingWordsQuery,
+        query: TopicalTermsQuery,
         expected_topic_specific_trending_words_df: DataFrame,
     ):
         assert_pyspark_df_equal(

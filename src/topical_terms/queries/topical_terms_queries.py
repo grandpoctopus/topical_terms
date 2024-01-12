@@ -22,7 +22,7 @@ from pyspark.sql.window import Window
 from pyspark_pipeline.queries import Query
 
 
-class TopicSpecificTrendingWordsQuery(Query):
+class TopicalTermsQuery(Query):
     def __init__(
         self,
         reddit_comments_df: DataFrame,

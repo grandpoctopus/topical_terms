@@ -1,7 +1,7 @@
 from pyspark_pipeline.schemas import EtlSchema
 
 
-class TopicSpecificTrendingWordsSchema(EtlSchema):
+class TopicalTermsSchema(EtlSchema):
     change_in_average_of_frequency_in_topic = "double"
     topic_daily_word_count = "bigint"
     daily_word_occurence = "bigint"
