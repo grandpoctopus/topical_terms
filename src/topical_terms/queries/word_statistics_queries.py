@@ -13,6 +13,9 @@ class WordStatisticsQuery(Query):
         **kwargs,
     ):
         """
+        Query to calculate overall and topic specific word counts and
+        rates.
+
         args:
             comment_tokens_df: a dataframe of tokenized comments
             with: 'word', 'topic', 'date', 'id' columns
@@ -46,7 +49,7 @@ class WordStatisticsQuery(Query):
             how="inner",
         )
 
-    def add_daily_word_occurence_and_count_columns(
+    def add_daily_word_frequency_and_count_columns(
         self, df: DataFrame
     ) -> DataFrame:
         partition_num = self.settings.spark_configs.get(
@@ -54,7 +57,7 @@ class WordStatisticsQuery(Query):
         )
         df = df.repartition(partition_num, ["date", "word"])
 
-        word_occurence_df = (
+        word_frequency_df = (
             df.select(
                 "comment_id",
                 "word",
@@ -65,19 +68,19 @@ class WordStatisticsQuery(Query):
                 "date",
                 "word",
             )
-            .agg(count("word").alias("daily_word_occurence"))
-            .select("date", "word", "daily_word_occurence")
+            .agg(count("word").alias("daily_word_frequency"))
+            .select("date", "word", "daily_word_frequency")
         )
 
         total_daily_word_count_df = self.sum_column(
-            word_occurence_df,
-            col_to_sum="daily_word_occurence",
+            word_frequency_df,
+            col_to_sum="daily_word_frequency",
             group_by_cols=["date"],
             new_col_name="total_daily_word_count",
         ).select(
             "word",
             "date",
-            "daily_word_occurence",
+            "daily_word_frequency",
             "total_daily_word_count",
         )
 
@@ -87,11 +90,11 @@ class WordStatisticsQuery(Query):
             "date",
             "word",
             "topic",
-            "daily_word_occurence",
+            "daily_word_frequency",
             "total_daily_word_count",
         )
 
-    def add_daily_word_occurence_in_topic_column(
+    def add_daily_word_frequency_in_topic_column(
         self, df: DataFrame
     ) -> DataFrame:
 
@@ -99,17 +102,17 @@ class WordStatisticsQuery(Query):
             df.groupBy(
                 "date",
                 "word",
-                "daily_word_occurence",
+                "daily_word_frequency",
                 "total_daily_word_count",
                 "topic",
             )
-            .agg(count("word").alias("daily_word_occurence_in_topic"))
+            .agg(count("word").alias("daily_word_frequency_in_topic"))
             .select(
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence",
-                "daily_word_occurence_in_topic",
+                "daily_word_frequency",
+                "daily_word_frequency_in_topic",
                 "total_daily_word_count",
             )
         )
@@ -117,15 +120,15 @@ class WordStatisticsQuery(Query):
     def add_topic_daily_word_count_column(self, df: DataFrame) -> DataFrame:
         return self.sum_column(
             df,
-            col_to_sum="daily_word_occurence_in_topic",
+            col_to_sum="daily_word_frequency_in_topic",
             group_by_cols=["date", "topic"],
             new_col_name="topic_daily_word_count",
         ).select(
             "topic",
             "word",
             "date",
-            "daily_word_occurence_in_topic",
-            "daily_word_occurence",
+            "daily_word_frequency_in_topic",
+            "daily_word_frequency",
             "total_daily_word_count",
             "topic_daily_word_count",
         )
@@ -133,62 +136,62 @@ class WordStatisticsQuery(Query):
     def add_word_count_columns(self, df: DataFrame) -> DataFrame:
         """
         Add columns to store a series of counts necessary
-        for computing changes in word frequencies
+        for computing changes in word rates
 
         NOTE: the order of transformations minimizes the
         number of shuffles needed to complete the counts
         """
         return (
-            df.transform(self.add_daily_word_occurence_and_count_columns)
-            .transform(self.add_daily_word_occurence_in_topic_column)
+            df.transform(self.add_daily_word_frequency_and_count_columns)
+            .transform(self.add_daily_word_frequency_in_topic_column)
             .transform(self.add_topic_daily_word_count_column)
             .select(
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_in_topic",
-                "daily_word_occurence",
+                "daily_word_frequency_in_topic",
+                "daily_word_frequency",
                 "total_daily_word_count",
                 "topic_daily_word_count",
             )
         )
 
-    def add_topic_frequency_and_specificity_columns(
+    def add_topic_rate_and_specificity_columns(
         self, df: DataFrame
     ) -> DataFrame:
         return (
             df.withColumn(
-                "frequency",
-                ((col("daily_word_occurence") / col("total_daily_word_count"))),
+                "rate",
+                ((col("daily_word_frequency") / col("total_daily_word_count"))),
             )
             .withColumn(
-                "frequency_in_topic",
+                "rate_in_topic",
                 (
                     (
-                        col("daily_word_occurence_in_topic")
+                        col("daily_word_frequency_in_topic")
                         / col("topic_daily_word_count")
                     )
                 ),
             )
             .withColumn(
                 "topic_specificity",
-                (col("frequency_in_topic")) / (col("frequency")),
+                (col("rate_in_topic")) / (col("rate")),
             )
             .select(
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_in_topic",
-                "daily_word_occurence",
+                "daily_word_frequency_in_topic",
+                "daily_word_frequency",
                 "total_daily_word_count",
                 "topic_daily_word_count",
-                "frequency",
-                "frequency_in_topic",
+                "rate",
+                "rate_in_topic",
                 "topic_specificity",
             )
         )
 
-    def add_five_day_average_of_frequency_in_topic_column(
+    def add_five_day_average_of_rate_in_topic_column(
         self, df: DataFrame
     ) -> DataFrame:
 
@@ -199,23 +202,23 @@ class WordStatisticsQuery(Query):
         )
 
         return df.withColumn(
-            "five_day_average_of_frequency_in_topic",
-            avg("frequency_in_topic").over(four_day_window),
+            "five_day_average_of_rate_in_topic",
+            avg("rate_in_topic").over(four_day_window),
         ).select(
             "topic",
             "word",
             "date",
-            "daily_word_occurence_in_topic",
-            "daily_word_occurence",
+            "daily_word_frequency_in_topic",
+            "daily_word_frequency",
             "total_daily_word_count",
             "topic_daily_word_count",
-            "frequency",
-            "frequency_in_topic",
+            "rate",
+            "rate_in_topic",
             "topic_specificity",
-            "five_day_average_of_frequency_in_topic",
+            "five_day_average_of_rate_in_topic",
         )
 
-    def add_daily_change_in_average_frequency_in_topic_column(
+    def add_daily_change_in_average_rate_in_topic_column(
         self, df: DataFrame
     ) -> DataFrame:
         one_day_window = Window.partitionBy(["topic", "word"]).orderBy("date")
@@ -223,15 +226,15 @@ class WordStatisticsQuery(Query):
         return (
             df.withColumn(
                 "prev_day_rolling_average",
-                lag(df["five_day_average_of_frequency_in_topic"]).over(
+                lag(df["five_day_average_of_rate_in_topic"]).over(
                     one_day_window
                 ),
             )
             .withColumn(
-                "change_in_average_of_frequency_in_topic",
+                "change_in_average_of_rate_in_topic",
                 (
                     (
-                        col("five_day_average_of_frequency_in_topic")
+                        col("five_day_average_of_rate_in_topic")
                         - col("prev_day_rolling_average")
                     )
                 ),
@@ -240,15 +243,15 @@ class WordStatisticsQuery(Query):
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_in_topic",
-                "daily_word_occurence",
+                "daily_word_frequency_in_topic",
+                "daily_word_frequency",
                 "total_daily_word_count",
                 "topic_daily_word_count",
-                "frequency",
-                "frequency_in_topic",
+                "rate",
+                "rate_in_topic",
                 "topic_specificity",
-                "five_day_average_of_frequency_in_topic",
-                "change_in_average_of_frequency_in_topic",
+                "five_day_average_of_rate_in_topic",
+                "change_in_average_of_rate_in_topic",
             )
         )
 
@@ -260,15 +263,15 @@ class WordStatisticsQuery(Query):
             "topic",
             "word",
             "date",
-            "daily_word_occurence_in_topic",
-            "daily_word_occurence",
+            "daily_word_frequency_in_topic",
+            "daily_word_frequency",
             "total_daily_word_count",
             "topic_daily_word_count",
-            "frequency",
-            "frequency_in_topic",
+            "rate",
+            "rate_in_topic",
             "topic_specificity",
-            "five_day_average_of_frequency_in_topic",
-            "change_in_average_of_frequency_in_topic",
+            "five_day_average_of_rate_in_topic",
+            "change_in_average_of_rate_in_topic",
             "id",
         )
 
@@ -283,26 +286,24 @@ class WordStatisticsQuery(Query):
             )
             .transform(self.add_comment_id_column)
             .transform(self.add_word_count_columns)
-            .transform(self.add_topic_frequency_and_specificity_columns)
-            .transform(self.add_five_day_average_of_frequency_in_topic_column)
-            .transform(
-                self.add_daily_change_in_average_frequency_in_topic_column
-            )
+            .transform(self.add_topic_rate_and_specificity_columns)
+            .transform(self.add_five_day_average_of_rate_in_topic_column)
+            .transform(self.add_daily_change_in_average_rate_in_topic_column)
             .transform(self.add_id_column)
             .select(
                 "id",
                 "topic",
                 "word",
                 "date",
-                "daily_word_occurence_in_topic",
-                "daily_word_occurence",
+                "daily_word_frequency_in_topic",
+                "daily_word_frequency",
                 "total_daily_word_count",
                 "topic_daily_word_count",
-                "frequency",
-                "frequency_in_topic",
+                "rate",
+                "rate_in_topic",
                 "topic_specificity",
-                "five_day_average_of_frequency_in_topic",
-                "change_in_average_of_frequency_in_topic",
+                "five_day_average_of_rate_in_topic",
+                "change_in_average_of_rate_in_topic",
             )
         )
 

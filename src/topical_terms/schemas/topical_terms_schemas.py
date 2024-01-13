@@ -9,12 +9,12 @@ class CommentTokensSchema(HiveSchema):
 
 
 class WordStatisticsSchema(CommentTokensSchema):
-    change_in_average_of_frequency_in_topic = "double"
+    change_in_average_of_rate_in_topic = "double"
     topic_daily_word_count = "bigint"
-    daily_word_occurence = "bigint"
-    daily_word_occurence_in_topic = "bigint"
-    frequency = "double"
-    frequency_in_topic = "double"
-    five_day_average_of_frequency_in_topic = "double"
+    daily_word_frequency = "bigint"
+    daily_word_frequency_in_topic = "bigint"
+    rate = "double"
+    rate_in_topic = "double"
+    five_day_average_of_rate_in_topic = "double"
     topic_specificity = "double"
     total_daily_word_count = "bigint"

@@ -23,6 +23,8 @@ class CommentTokensQuery(Query):
         **kwargs,
     ):
         """
+        Query to split reddit comments into cleaned word tokens
+
         args:
             df: A spark DataFrame containing reddit comments
                 along with subreddit information and timestamps
