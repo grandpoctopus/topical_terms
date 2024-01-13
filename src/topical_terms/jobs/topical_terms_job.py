@@ -5,8 +5,12 @@ from pyspark.sql.utils import AnalysisException
 from pyspark_pipeline.jobs import Job
 from pyspark_pipeline.utilities.settings_utils import Settings, get_table_name
 
-from topical_terms.queries.topical_terms_queries import TopicalTermsQuery
-from topical_terms.schemas.topical_terms_schemas import TopicalTermsSchema
+from topical_terms.queries.comment_tokens_queries import CommentTokensQuery
+from topical_terms.queries.word_statistics_queries import WordStatisticsQuery
+from topical_terms.schemas.topical_terms_schemas import (
+    CommentTokensSchema,
+    WordStatisticsSchema,
+)
 
 
 class TopicalTermsJob(Job):
@@ -48,12 +52,21 @@ class TopicalTermsJob(Job):
 
         incremental_processing_type = settings.incremental_processing_type
 
-        topical_terms_df = TopicalTermsQuery(
+        comment_tokens_df = CommentTokensQuery(
             spark=self.spark,
             settings=settings,
-            schema=TopicalTermsSchema(),
+            schema=CommentTokensSchema(),
             subreddit_topics_map_df=self.subreddit_topics_map_df,
             reddit_comments_df=self.reddit_comments_df,
+        ).run()
+
+        comment_tokens_df.cache()
+
+        topical_terms_df = WordStatisticsQuery(
+            spark=self.spark,
+            settings=settings,
+            schema=WordStatisticsSchema(),
+            comment_tokens_df=comment_tokens_df,
         ).write(
             "topical_terms",
             "parquet",
@@ -65,6 +78,11 @@ class TopicalTermsJob(Job):
             incremental_processing_type=incremental_processing_type,
         )
 
+        comment_tokens_df.unpersist()
+
         self.write_audit("sdoh_audit", settings)
 
-        return {"topical_terms": topical_terms_df}
+        return {
+            "comment_tokens": comment_tokens_df,
+            "topical_terms": topical_terms_df,
+        }

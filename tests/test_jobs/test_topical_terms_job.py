@@ -7,10 +7,10 @@ from pyspark_pipeline.utilities.settings_utils import Settings, SourceTable
 from pyspark_test import assert_pyspark_df_equal
 
 from topical_terms.jobs.topical_terms_job import TopicalTermsJob
-from topical_terms.schemas.topical_terms_schemas import TopicalTermsSchema
+from topical_terms.schemas.topical_terms_schemas import WordStatisticsSchema
 
 
-class TestUnitTopicalTermsQuery:
+class TestUnitWordStatisticsQuery:
     @pytest.fixture()
     def job(
         self,
@@ -34,7 +34,7 @@ class TestUnitTopicalTermsQuery:
             settings=settings_obj,
             audit_df=None,
             args=args,
-            schema=TopicalTermsSchema(),
+            schema=WordStatisticsSchema(),
             subreddit_topics_map_df=subreddit_topics_map_df,
             reddit_comments_df=reddit_comments_df,
         )
@@ -42,10 +42,10 @@ class TestUnitTopicalTermsQuery:
     def test_run(
         self,
         job: TopicalTermsJob,
-        expected_topic_specific_trending_words_df: DataFrame,
+        words_statistics_df: DataFrame,
     ):
         assert_pyspark_df_equal(
             job.run()["topical_terms"],
-            expected_topic_specific_trending_words_df,
+            words_statistics_df,
             order_by="id",
         )
