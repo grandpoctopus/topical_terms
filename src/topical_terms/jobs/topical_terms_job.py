@@ -73,8 +73,8 @@ class TopicalTermsJob(Job):
             self.logger,
             row_id_columns=["id"],
             hive_table_type=settings.hive_output_table_type,
-            col_to_repartition_by="id",
-            partition_hdfs_by_col="id",
+            col_to_repartition_by=["topic", "date"],
+            partition_hdfs_by_col=["topic", "date"],
             incremental_processing_type=incremental_processing_type,
         )
 
