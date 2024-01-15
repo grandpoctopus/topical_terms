@@ -31,6 +31,25 @@ This table supports queries to determine words with high specificity (`topic_spe
 1. Clone this repo
 2. Using poetry run `poetry install`
 
+## Building local-dev image
+1. Install docker
+2. From the pyspark-pipeline directory (the same one containing this README) Run
+```
+docker build -t pyspark-pipeline:latest -f docker/local-developer-image/Dockerfile .
+```
+
 ## Running Tests
 
 `poetry run tox`
+
+## Executing Pipeline
+
+### Client Mode
+```
+python -m topical_terms.topical_terms -s settings/topical_terms.yaml
+```
+
+### Cluster Mode
+```
+scripts/cluster_submit.sh -f src/topical_terms/topical_terms.py -s settings/topical_terms.yaml -m yarn
+```
