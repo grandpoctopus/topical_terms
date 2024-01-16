@@ -34,11 +34,6 @@ class WordStatisticsQuery(Query):
         group_by_cols: List[str],
         new_col_name: str,
     ) -> DataFrame:
-        partition_num = self.settings.spark_configs.get(
-            "spark.sql.shuffle.partitions", 9600
-        )
-        df = df.repartition(partition_num, group_by_cols)
-
         sum_df = df.groupby(*group_by_cols).agg(
             sum(col_to_sum).alias(new_col_name)
         )
